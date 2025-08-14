@@ -1,0 +1,136 @@
+package repository
+
+{{ $struct := .Struct }}
+
+import (
+    {{- if .WithCtx }}
+    "context"
+    {{- end }}
+
+    "{{ $struct.Package }}"
+
+    {{- if eq .ORM "gorm" }}
+    "gorm.io/gorm"
+    {{- else if eq .ORM "bun" }}
+    "github.com/uptrace/bun"
+    {{- end }}
+)
+
+type {{ $struct.Name }}Repository interface {
+    {{- if .WithCtx }}
+    Create(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    FindById(ctx context.Context, {{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error)
+    Update(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    Delete(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    {{- else }}
+    Create({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    FindById({{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error)
+    Update({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    Delete({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    {{- end }}
+}
+
+type {{ lowerFirst $struct.Name }}Repository struct {
+    {{- if eq .ORM "gorm" }}
+    db *gorm.DB
+    {{- else if eq .ORM "bun" }}
+    db *bun.DB
+    {{- end }}
+}
+
+func New{{ $struct.Name }}Repository(db {{ if eq .ORM "gorm" }}*gorm.DB{{ else if eq .ORM "bun" }}*bun.DB{{ end }}) {{ $struct.Name }}Repository {
+    return &{{ lowerFirst $struct.Name }}Repository{db: db}
+}
+
+{{ if .WithCtx }}
+func (r *{{ lowerFirst $struct.Name }}Repository) Create(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "INSERT INTO {{ toSnakeCase $struct.Name }} ({{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ toSnakeCase $f.Name }}{{- end}}) VALUES ({{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}?{{- end}})"
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Exec(query, {{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().ExecContext(ctx, query, {{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}})
+    return err
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) FindById(ctx context.Context, {{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error) {
+    query := "SELECT {{ range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ toSnakeCase $f.Name }}{{- end}} FROM {{ toSnakeCase $struct.Name }} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    var res {{ $struct.PackageName }}.{{ $struct.Name }}
+    {{- if eq .ORM "gorm" }}
+    err := r.db.WithContext(ctx).Raw(query, {{ lowerFirst $struct.PrimaryKey }}).Scan(&res).Error
+    {{- else if eq .ORM "bun" }}
+    row := r.db.DB().QueryRowContext(ctx, query, {{ lowerFirst $struct.PrimaryKey }})
+    err := row.Scan({{ range $i, $f := $struct.Fields }}{{if $i}}, {{end}} &res.{{$f.Name}}{{- end}})
+    {{- end }}
+    if err != nil {
+        return nil, err
+    }
+    return &res, nil
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Update(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "UPDATE {{ toSnakeCase $struct.Name }} SET {{ $first := true}}{{- range $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}{{if not $first}}, {{end}}{{ toSnakeCase $f.Name }} = ?{{ $first = false }}{{end}}{{- end}} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Exec(query, {{- range $i, $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().ExecContext(ctx, query, {{- range $i, $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}})
+    return err
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Delete(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "DELETE FROM {{ toSnakeCase $struct.Name }} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Exec(query, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().ExecContext(ctx, query, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}})
+    return err
+    {{- end }}
+}
+{{ else }}
+// Non-context version
+func (r *{{ lowerFirst $struct.Name }}Repository) Create({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "INSERT INTO {{ toSnakeCase $struct.Name }} ({{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ toSnakeCase $f.Name }}{{- end}}) VALUES ({{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}?{{- end}})"
+    {{- if eq .ORM "gorm" }}
+    return r.db.Exec(query, {{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().Exec(query, {{- range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}})
+    return err
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) FindById({{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error) {
+    query := "SELECT {{ range $i, $f := $struct.Fields}}{{if $i}}, {{end}}{{ toSnakeCase $f.Name }}{{- end}} FROM {{ toSnakeCase $struct.Name }} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    var res {{ $struct.PackageName }}.{{ $struct.Name }}
+    {{- if eq .ORM "gorm" }}
+    err := r.db.Raw(query, {{ lowerFirst $struct.PrimaryKey }}).Scan(&res).Error
+    {{- else if eq .ORM "bun" }}
+    row := r.db.DB().QueryRow(query, {{ lowerFirst $struct.PrimaryKey }})
+    err := row.Scan({{ range $i, $f := $struct.Fields }}{{if $i}}, {{end}} &res.{{$f.Name}}{{- end}})
+    {{- end }}
+    if err != nil {
+        return nil, err
+    }
+    return &res, nil
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Update({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "UPDATE {{ toSnakeCase $struct.Name }} SET {{ $first := true}}{{- range $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}{{if not $first}}, {{end}}{{ toSnakeCase $f.Name }} = ?{{ $first = false }}{{end}}{{- end}} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    {{- if eq .ORM "gorm" }}
+    return r.db.Exec(query, {{- range $i, $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().Exec(query, {{- range $i, $f := $struct.Fields}}{{if ne $f.Name $struct.PrimaryKey}}, {{end}}{{ lowerFirst $struct.Name }}.{{$f.Name}}{{- end}}, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}})
+    return err
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Delete({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    query := "DELETE FROM {{ toSnakeCase $struct.Name }} WHERE {{ toSnakeCase $struct.PrimaryKey }} = ?"
+    {{- if eq .ORM "gorm" }}
+    return r.db.Exec(query, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}}).Error
+    {{- else if eq .ORM "bun" }}
+    _, err := r.db.DB().Exec(query, {{ lowerFirst $struct.Name }}.{{$struct.PrimaryKey}})
+    return err
+    {{- end }}
+}
+{{ end }}

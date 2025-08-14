@@ -1,0 +1,120 @@
+package repository
+
+{{ $struct := .Struct }}
+
+import (
+    {{- if .WithCtx }}
+    "context"
+    {{- end }}
+
+    "{{ $struct.Package }}"
+
+    {{- if eq .ORM "gorm" }}
+    "gorm.io/gorm"
+    {{- else if eq .ORM "bun" }}
+    "github.com/uptrace/bun"
+    {{- end }}
+)
+
+type {{ $struct.Name }}Repository interface {
+    {{- if .WithCtx }}
+    Create(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    FindById(ctx context.Context, {{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error)
+    Update(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    Delete(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    {{- else }}
+    Create({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    FindById({{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error)
+    Update({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    Delete({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error
+    {{- end }}
+}
+
+type {{ lowerFirst $struct.Name }}Repository struct {
+    {{- if eq .ORM "gorm" }}
+    db *gorm.DB
+    {{- end }}
+}
+
+func New{{ $struct.Name }}Repository({{ if eq .ORM "gorm" }}db *gorm.DB{{ end }}) {{ $struct.Name }}Repository {
+    return &{{ lowerFirst $struct.Name }}Repository{
+        {{- if eq .ORM "gorm" }}
+        db: db,
+        {{- end }}
+    }
+}
+
+{{ if .WithCtx }}
+func (r *{{ lowerFirst $struct.Name }}Repository) Create(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Create({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    // TODO: raw SQL insert here
+    return nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) FindById(ctx context.Context, {{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error) {
+    var res {{ $struct.PackageName }}.{{ $struct.Name }}
+    {{- if eq .ORM "gorm" }}
+    err := r.db.WithContext(ctx).First(&res, "{{ lowerFirst $struct.PrimaryKey }} = ?", {{ lowerFirst $struct.PrimaryKey }}).Error
+    return &res, err
+    {{- else if .RawSQL }}
+    // TODO: raw SQL select here
+    return &res, nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Update(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Save({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    // TODO: raw SQL update here
+    return nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Delete(ctx context.Context, {{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.WithContext(ctx).Delete({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    // TODO: raw SQL delete here
+    return nil
+    {{- end }}
+}
+{{ else }}
+// non-context version
+func (r *{{ lowerFirst $struct.Name }}Repository) Create({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.Create({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    return nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) FindById({{ lowerFirst $struct.PrimaryKey }} {{ $struct.PrimaryKeyType }}) (*{{ $struct.PackageName }}.{{ $struct.Name }}, error) {
+    var res {{ $struct.PackageName }}.{{ $struct.Name }}
+    {{- if eq .ORM "gorm" }}
+    err := r.db.First(&res, "{{ lowerFirst $struct.PrimaryKey }} = ?", {{ lowerFirst $struct.PrimaryKey }}).Error
+    return &res, err
+    {{- else if .RawSQL }}
+    return &res, nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Update({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.Save({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    return nil
+    {{- end }}
+}
+
+func (r *{{ lowerFirst $struct.Name }}Repository) Delete({{ lowerFirst $struct.Name }} *{{ $struct.PackageName }}.{{ $struct.Name }}) error {
+    {{- if eq .ORM "gorm" }}
+    return r.db.Delete({{ lowerFirst $struct.Name }}).Error
+    {{- else if .RawSQL }}
+    return nil
+    {{- end }}
+}
+{{ end }}
