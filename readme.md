@@ -1,6 +1,6 @@
 # orm2hex
 
-`orm2hex` is a Golang code generator that automatically creates repository interfaces and CRUD implementations for your structs following the **Hexagonal Architecture** pattern. It supports both **GORM** and **Bun** ORMs, with an option to generate **raw SQL** queries instead of ORM-specific methods. The tool can optionally include `context.Context` in generated methods.
+`orm2hex` is a Golang code generator that automatically creates repository interfaces and CRUD implementations for your structs following the **Hexagonal Architecture** pattern. It supports both **[GORM](https://gorm.io/index.html)** and **[Bun](https://bun.uptrace.dev/)** ORMs, with an option to generate **raw SQL** queries instead of ORM-specific methods. The tool can optionally include `context.Context` in generated methods.
 
 ---
 
